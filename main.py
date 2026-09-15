@@ -21,10 +21,16 @@ from aiogram.exceptions import TelegramForbiddenError
 # SOZLAMALAR
 # =========================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8858398474:AAFe_a7bEk-sVU40T7Bcut0WzVGZqQY7GsE")
+# MUHIM: Token faqat environment variable orqali olinadi.
+# Hech qachon tokenni to'g'ridan-to'g'ri kod ichiga yozmang!
+BOT_TOKEN = os.getenv("8858398474:AAENU8BvZO3FL-FvDLWCPyIN9VtvspzQ6Zg")
 
 AUTO_SEND_HOUR = 8
 AUTO_SEND_MINUTE = 0
+# Har kuni 08:00 dan boshlab shu daqiqalar oralig'ida yuborish imkoniyatini beradi
+# (server qayta ishga tushishi yoki sekinlashishi sababli 08:00:00 aniq o'tkazib
+# yuborilmasligi uchun).
+AUTO_SEND_WINDOW_MINUTES = 5
 
 TIMEZONE = ZoneInfo("Asia/Tashkent")
 
@@ -129,9 +135,19 @@ def load_users():
         return {}
 
 
-def save_users():
-    with open(USERS_FILE, "w", encoding="utf-8") as file:
-        json.dump(users, file, ensure_ascii=False, indent=4)
+def _save_users_sync(data):
+    # Avval vaqtinchalik faylga yozib, keyin almashtiramiz —
+    # dastur yozish jarayonida to'xtab qolsa ham fayl buzilmaydi.
+    tmp_file = USERS_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+    os.replace(tmp_file, USERS_FILE)
+
+
+async def save_users():
+    # Fayl yozish bloklovchi amal, shuning uchun uni alohida
+    # thread'da bajaramiz va asyncio event loop'ni to'xtatmaymiz.
+    await asyncio.to_thread(_save_users_sync, users)
 
 
 users = load_users()
@@ -247,15 +263,18 @@ async def get_weather(latitude, longitude):
 
 async def make_current_weather_text(latitude, longitude, location_name):
     data = await get_weather(latitude, longitude)
-    if not data:
-        return "⚠️ Ob-havo serverida xatolik yuz berdi."
+    if not data or "current" not in data:
+        return "⚠️ Ob-havo serverida xatolik yuz berdi. Birozdan so‘ng qayta urinib ko‘ring."
 
-    current = data["current"]
-    temperature = current["temperature_2m"]
-    humidity = current["relative_humidity_2m"]
-    pressure = current["surface_pressure"]
-    wind = current["wind_speed_10m"]
-    code = current["weather_code"]
+    try:
+        current = data["current"]
+        temperature = current["temperature_2m"]
+        humidity = current["relative_humidity_2m"]
+        pressure = current["surface_pressure"]
+        wind = current["wind_speed_10m"]
+        code = current["weather_code"]
+    except KeyError:
+        return "⚠️ Ob-havo ma'lumotlari to‘liq emas. Birozdan so‘ng qayta urinib ko‘ring."
 
     condition = WEATHER_CODES.get(code, "🌤 Noma'lum ob-havo")
     pressure_mmhg = round(pressure * 0.750062)
@@ -278,14 +297,17 @@ async def make_current_weather_text(latitude, longitude, location_name):
 
 async def make_weather_text(latitude, longitude, location_name):
     data = await get_weather(latitude, longitude)
-    if not data:
-        return "⚠️ Ob-havo serverida xatolik yuz berdi."
+    if not data or "daily" not in data:
+        return "⚠️ Ob-havo serverida xatolik yuz berdi. Birozdan so‘ng qayta urinib ko‘ring."
 
-    daily = data["daily"]
-    daily_dates = daily["time"]
-    daily_codes = daily["weather_code"]
-    daily_max = daily["temperature_2m_max"]
-    daily_min = daily["temperature_2m_min"]
+    try:
+        daily = data["daily"]
+        daily_dates = daily["time"]
+        daily_codes = daily["weather_code"]
+        daily_max = daily["temperature_2m_max"]
+        daily_min = daily["temperature_2m_min"]
+    except KeyError:
+        return "⚠️ Ob-havo ma'lumotlari to‘liq emas. Birozdan so‘ng qayta urinib ko‘ring."
 
     text = (
         f"📍 <b>{location_name}</b>\n\n"
@@ -297,7 +319,7 @@ async def make_weather_text(latitude, longitude, location_name):
         "Payshanba", "Juma", "Shanba", "Yakshanba"
     ]
 
-    for i in range(7):
+    for i in range(min(7, len(daily_dates))):
         current_date = date.fromisoformat(daily_dates[i])
         if i == 0:
             day_name = "Bugun"
@@ -334,7 +356,7 @@ async def start(message: types.Message):
             "auto": False,
             "last_sent": ""
         }
-        save_users()
+        await save_users()
 
     await message.answer(
         "🌤 <b>Ob-havo botiga xush kelibsiz!</b>\n\n"
@@ -403,7 +425,12 @@ async def choose_region(callback: types.CallbackQuery):
     action = parts[1]  # "current" yoki "seven"
     region_key = parts[2]  # viloyat kaliti
 
-    name, latitude, longitude = REGIONS[region_key]
+    region = REGIONS.get(region_key)
+    if not region:
+        await callback.answer("⚠️ Bunday hudud topilmadi.", show_alert=True)
+        return
+
+    name, latitude, longitude = region
     user_id = str(callback.from_user.id)
 
     users[user_id] = {
@@ -413,7 +440,7 @@ async def choose_region(callback: types.CallbackQuery):
         "auto": users.get(user_id, {}).get("auto", False),
         "last_sent": users.get(user_id, {}).get("last_sent", "")
     }
-    save_users()
+    await save_users()
 
     await callback.answer(f"{name} tanlandi!")
     await callback.message.answer("⏳ Ob-havo olinmoqda...")
@@ -447,7 +474,7 @@ async def receive_location(message: types.Message):
         "auto": users.get(user_id, {}).get("auto", False),
         "last_sent": users.get(user_id, {}).get("last_sent", "")
     }
-    save_users()
+    await save_users()
 
     await message.answer("📍 Joylashuvingiz qabul qilindi!\n⏳ Ob-havo olinmoqda...")
     text = await make_current_weather_text(latitude, longitude, "Sizning joylashuvingiz")
@@ -476,7 +503,7 @@ async def enable_auto(message: types.Message):
         }
     else:
         users[user_id]["auto"] = True
-    save_users()
+    await save_users()
 
     await message.answer(
         "🔔 <b>Avtomatik yuborish yoqildi!</b>\n\n"
@@ -490,7 +517,7 @@ async def disable_auto(message: types.Message):
     user_id = str(message.from_user.id)
     if user_id in users:
         users[user_id]["auto"] = False
-        save_users()
+        await save_users()
     await message.answer("🔕 Avtomatik ob-havo yuborish o‘chirildi.")
 
 
@@ -517,8 +544,14 @@ async def auto_weather_loop():
     while True:
         try:
             now = datetime.now(TIMEZONE)
-            if now.hour == AUTO_SEND_HOUR and now.minute == AUTO_SEND_MINUTE:
+            target_minutes = AUTO_SEND_HOUR * 60 + AUTO_SEND_MINUTE
+            now_minutes = now.hour * 60 + now.minute
+
+            in_window = 0 <= (now_minutes - target_minutes) < AUTO_SEND_WINDOW_MINUTES
+
+            if in_window:
                 today = now.strftime("%Y-%m-%d")
+                changed = False
                 for user_id, user in list(users.items()):
                     if not user.get("auto", False):
                         continue
@@ -536,14 +569,16 @@ async def auto_weather_loop():
                             parse_mode="HTML"
                         )
                         user["last_sent"] = today
-                        save_users()
+                        changed = True
                     except TelegramForbiddenError:
                         user["auto"] = False
-                        save_users()
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                        changed = True
+                    except Exception as e:
+                        print(f"Xabar yuborishda xatolik ({user_id}): {e}")
+                if changed:
+                    await save_users()
+        except Exception as e:
+            print(f"auto_weather_loop xatolik: {e}")
         await asyncio.sleep(30)
 
 
@@ -553,12 +588,14 @@ async def auto_weather_loop():
 
 async def main():
     if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN topilmadi!")
+        raise ValueError(
+            "BOT_TOKEN topilmadi! Uni environment variable sifatida sozlang "
+            "(masalan, Render'dagi Environment Variables bo'limida)."
+        )
     print("🤖 Ob-havo bot ishga tushdi!")
 
     # Flask serverini alohida oqimda (thread) ishga tushiramiz
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
+    flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     # Ob-havo yuborish siklini ishga tushiramiz
