@@ -240,8 +240,6 @@ async def get_weather(latitude, longitude):
         print(f"Ob-havo olishda xatolik: {e}")
         return None
 
-        return await response.json()
-
 
 # =========================================================
 # FAQAT BUGUNGI OB-HAVO
@@ -378,7 +376,7 @@ async def seven_days_menu(message: types.Message):
 
 
 # =========================================================
-# "KEYINGI VILOYAT OB-HAVOSI" BOSILGANDA VILOYATLARNI CHIQARISH
+# "KEYINGI VILOYAT OB-HAVOSI" BOSILGANDA VILOYATLARni CHIQARISH
 # =========================================================
 
 @dp.callback_query(F.data.startswith("show_regions:"))
