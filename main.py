@@ -23,7 +23,7 @@ from aiogram.exceptions import TelegramForbiddenError
 
 # MUHIM: Token faqat environment variable orqali olinadi.
 # Hech qachon tokenni to'g'ridan-to'g'ri kod ichiga yozmang!
-BOT_TOKEN = os.getenv("8858398474:AAENU8BvZO3FL-FvDLWCPyIN9VtvspzQ6Zg")
+BOT_TOKEN = "8858398474:AAENU8BvZO3FL-FvDLWCPyIN9VtvspzQ6Zg"
 
 AUTO_SEND_HOUR = 8
 AUTO_SEND_MINUTE = 0
