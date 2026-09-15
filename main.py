@@ -230,10 +230,16 @@ async def get_weather(latitude, longitude):
         "timezone": "Asia/Tashkent"
     }
     timeout = aiohttp.ClientTimeout(total=20)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url, params=params) as response:
-            if response.status != 200:
-                return None
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    return None
+                return await response.json()
+    except Exception as e:
+        print(f"Ob-havo olishda xatolik: {e}")
+        return None
+
             return await response.json()
 
 
