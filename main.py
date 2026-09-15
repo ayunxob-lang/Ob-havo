@@ -240,7 +240,7 @@ async def get_weather(latitude, longitude):
         print(f"Ob-havo olishda xatolik: {e}")
         return None
 
-            return await response.json()
+        return await response.json()
 
 
 # =========================================================
