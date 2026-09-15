@@ -21,7 +21,7 @@ from aiogram.exceptions import TelegramForbiddenError
 # SOZLAMALAR
 # =========================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8858398474:AAHVjWf1gXDbXaivBJ_s6OGcgc7JCGwYgmc")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8858398474:AAFe_a7bEk-sVU40T7Bcut0WzVGZqQY7GsE")
 
 AUTO_SEND_HOUR = 8
 AUTO_SEND_MINUTE = 0
